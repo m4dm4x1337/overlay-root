@@ -1,0 +1,31 @@
+overlay-root (3.0.0) unstable; urgency=low
+
+  * Modified 2023 by m4dm4x1337 (fixed 2 bugs, see v3.0.0 changelog)
+    - Resolve root fs symlink if any (e.g. /dev/mapper/ link if root
+      is encrypted)
+    - Taking tabs into account in /etc/fstab
+
+ -- m4dm4x1337 <madmax@earth.local>  Sun, 29 Oct 2023 01:00:00 +0000
+
+overlay-root (2.0.0) unstable; urgency=low
+
+  * Modified 2015 by Pascal Rosin to work on raspian-ua-netinst with overlayfs
+    integrated in Linux Kernel >= 3.18.
+    - Modified to work with overlayfs integrated in Linux Kernel (>= 3.18)
+    - Introduced workdir needed for new overlayfs
+    - Changed `mount --move` to `mount -o move` to drop busybox requirement
+    - Tested with raspian-ua-netinst v1.0.7 (Linux 3.18.0-trunk-rpi,
+      Debian 3.18.5) on a Raspberry Pi. The aufs part is not tested!
+
+ -- m4dm4x1337 <madmax@earth.local>  Sun, 29 Oct 2023 00:30:00 +0000
+
+overlay-root (1.0.0) unstable; urgency=low
+
+  * Originally written by Axel Heider (Copyright 2012) for Ubuntu 11.10.
+    - This version can be found here: 
+      https://help.ubuntu.com/community/aufsRootFileSystemOnUsbFlash#Overlayfs
+    - Written by Axel Heider for Ubuntu 11.10
+    - Based on scripts from Sebastian P. and Nicholas A. Schembri 
+      State College PA USA
+
+ -- m4dm4x1337 <madmax@earth.local>  Sun, 29 Oct 2023 00:00:00 +0000

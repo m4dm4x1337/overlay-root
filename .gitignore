@@ -1,0 +1,6 @@
+overlay-root_*_*
+overlay-root/debian/files
+overlay-root/debian/overlay-root/
+overlay-root/debian/overlay-root.substvars
+overlay-root/debian/overlay-root.debhelper.log
+overlay-root/debian/.debhelper/

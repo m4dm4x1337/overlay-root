@@ -1,0 +1,19 @@
+Source: overlay-root
+Section: admin
+Priority: optional
+Maintainer: m4dm4x1337 <madmax@earth.local>
+Bugs: https://github.com/m4dm4x1337/overlay-root/issues
+Standards-Version: 4.6.2
+
+Package: overlay-root
+Architecture: all
+Depends: coreutils (>= 8.5), grep (>= 2.5.4), lsb-base, mount (>= 2.19.1-2), initramfs-tools (>= 0.100)
+Homepage: https://github.com/m4dm4x1337/overlay-root
+Description: Use an overlayfs on top of a read-only root filesystem
+ With overlay-root it is possible to provide the root file system with
+ temporary write protection by mounting it as read-only. All write
+ accesses will be temporarily written to the main memory (RAM) on a ramdisk.
+ .
+ For example, overlayroot opens up the following options:
+  * Safe and hardware-related testing of software without using a VM
+  * Shared computers that return to their initial state after a reboot
