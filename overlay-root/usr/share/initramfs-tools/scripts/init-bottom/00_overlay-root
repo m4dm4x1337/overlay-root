@@ -1,0 +1,314 @@
+#!/bin/sh
+#
+#  Read-only root filesystem using overlayfs
+#
+#  Modified 2026 by m4dm4x1337 (fixed legacy overlayfs support, see v4.0.0 changelog)
+#
+#  Modified 2023 by m4dm4x1337 (fixed 2 bugs, see v3.0.0 changelog)
+#
+#  Modified 2015 by Pascal Rosin to work on raspian-ua-netinst with
+#  overlayfs integrated in Linux Kernel >= 3.18.
+#
+#  Originally written by Axel Heider (Copyright 2012) for Ubuntu 11.10.
+#  This version can be found here:
+#  https://help.ubuntu.com/community/aufsRootFileSystemOnUsbFlash#Overlayfs
+#
+#  Based on scripts from
+#    Sebastian P.
+#    Nicholas A. Schembri State College PA USA
+#
+#  This program is free software: you can redistribute it and/or modify
+#  it under the terms of the GNU General Public License as published by
+#  the Free Software Foundation, either version 3 of the License, or
+#  (at your option) any later version.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with this program.  If not, see
+#    <http://www.gnu.org/licenses/>.
+#
+#
+# Changelog:
+#
+# v1.0.0
+#   - written by Axel Heider for Ubuntu 11.10
+#
+# v2.0.0
+#   - Modified to work with overlayfs integrated in Linux Kernel (>= 3.18)
+#   - introduce workdir needed for new overlayfs
+#   - change `mount --move` to `mount -o move` to drop busybox requirement
+#   - Tested with raspian-ua-netinst v1.0.7
+#     (Linux 3.18.0-trunk-rpi, Debian 3.18.5) on a Raspberry Pi.
+#     The aufs part is not tested!
+#
+# v3.0.0
+#   - Resolve root fs symlink if any (e.g. /dev/mapper/ link if root is encrypted)
+#   - Taking tabs into account in /etc/fstab
+#
+# v4.0.0
+#   - Add kernel-version aware module selection via a hook script
+#   - Support both overlay and the legacy overlayfs driver
+#   - Skip workdir when using the legacy overlayfs driver
+#   - Remove aufs support because it keeps direct references to its branch
+#     mounts, preventing systemd from cleanly unmounting them during shutdown;
+#     aufs is also out-of-tree and no longer available in current distributions
+#   - Create the upperdir after mounting tmpfs on the writable layer
+#   - Move the script to /usr/share/initramfs-tools/scripts/init-bottom
+#   - Add the optional root-ro=volatile mode for Linux 5.10 and newer
+#   - Renumber error messages consistently
+#
+# Notes:
+#   * no changes to the root fs are made by this script.
+#   * if /home/[user] is on the RO root fs, files are in ram and not saved.
+#
+# Package layout:
+#  * this script is installed in
+#    /usr/share/initramfs-tools/scripts/init-bottom/00_overlay-root
+#  * the zz-overlay-root hook adds the matching overlay kernel module
+#  update-initramfs -u -k all
+#  reboot
+#
+# Disable read-only root fs
+#   * option 1: kernel boot parameter "disable-root-ro=true"
+#   * option 2: create file "/disable-root-ro"
+#
+# Optional read-only root fs mode
+#   * kernel boot parameter "root-ro=volatile" on Linux 5.10 and newer
+#
+# no pre requirement
+PREREQ=""
+prereqs()
+{
+    echo "$PREREQ"
+}
+
+case $1 in
+prereqs)
+    prereqs
+    exit 0
+    ;;
+esac
+
+# import /usr/share/initramfs-tools/scripts/functions
+. /scripts/functions
+
+MYTAG="root-ro"
+DISABLE_MAGIC_FILE="/disable-root-ro"
+
+# parse kernel boot command line
+DISABLE_ROOT_RO=
+ROOT_RO_MODE=
+for CMD_PARAM in $(cat /proc/cmdline); do
+    case ${CMD_PARAM} in
+        disable-root-ro=*)
+            DISABLE_ROOT_RO=${CMD_PARAM#disable-root-ro=}
+            ;;
+        root-ro=*)
+            ROOT_RO_MODE=${CMD_PARAM#root-ro=}
+            ;;
+    esac
+done
+
+# check if read-only root fs is disabled
+if [ ! -z "${DISABLE_ROOT_RO}" ]; then
+    log_warning_msg "${MYTAG}: disabled, found boot parameter disable-root-ro=${DISABLE_ROOT_RO}"
+    exit 0
+fi
+if [ -e "${rootmnt}${DISABLE_MAGIC_FILE}" ]; then
+    log_warning_msg "${MYTAG}: disabled, found file ${rootmnt}${DISABLE_MAGIC_FILE}"
+    exit 0
+fi
+
+# Generic settings.
+# ${ROOT} and ${rootmnt} are predefined by the caller of this script. The root
+# filesystem at ${rootmnt} is already mounted read-only in the initramfs.
+ROOT_RO=/mnt/root-ro
+ROOT_RW=/mnt/root-rw
+ROOT_RW_UPPER=${ROOT_RW}/upper
+ROOT_RW_WORK=${ROOT_RW}/work
+
+# Try modern overlay first and fall back to the legacy overlayfs driver.
+if modprobe -qb overlay; then
+    ROOT_RO_DRIVER=overlay
+elif modprobe -qb overlayfs; then
+    ROOT_RO_DRIVER=overlayfs
+else
+    log_failure_msg "${MYTAG} ERROR 1: missing kernel module overlay/overlayfs"
+    exit 0
+fi
+
+# Configure optional mount modes.
+ROOT_RO_EXTRA_MOUNT_OPTIONS=
+case "${ROOT_RO_MODE}" in
+    "")
+        ;;
+    volatile)
+        KERNEL_RELEASE=$(uname -r)
+        KERNEL_MAJOR=${KERNEL_RELEASE%%.*}
+        KERNEL_MINOR=${KERNEL_RELEASE#*.}
+        KERNEL_MINOR=${KERNEL_MINOR%%.*}
+
+        if [ "${ROOT_RO_DRIVER}" != "overlay" ]; then
+            log_warning_msg "${MYTAG}: root-ro=volatile requires the overlay driver; using kernel defaults"
+        elif [ "${KERNEL_MAJOR}" -gt 5 ]; then
+            ROOT_RO_EXTRA_MOUNT_OPTIONS=",volatile"
+        elif [ "${KERNEL_MAJOR}" -eq 5 ] && [ "${KERNEL_MINOR}" -ge 10 ]; then
+            ROOT_RO_EXTRA_MOUNT_OPTIONS=",volatile"
+        else
+            log_warning_msg "${MYTAG}: root-ro=volatile requires Linux 5.10 or newer; using kernel defaults"
+        fi
+        ;;
+    *)
+        log_warning_msg "${MYTAG}: unknown root-ro mode '${ROOT_RO_MODE}'; using kernel defaults"
+        ;;
+esac
+
+# Set mount parameters for the selected driver.
+case "${ROOT_RO_DRIVER}" in
+    overlay)
+        MOUNT_PARMS="-t overlay -o lowerdir=${ROOT_RO},upperdir=${ROOT_RW_UPPER},workdir=${ROOT_RW_WORK}${ROOT_RO_EXTRA_MOUNT_OPTIONS} overlay ${rootmnt}"
+        ;;
+    overlayfs)
+        MOUNT_PARMS="-t overlayfs -o lowerdir=${ROOT_RO},upperdir=${ROOT_RW_UPPER} overlayfs ${rootmnt}"
+        ;;
+esac
+
+# Make the mount point on the init root filesystem at ${ROOT_RW}.
+[ -d ${ROOT_RW} ] || mkdir -p ${ROOT_RW}
+if [ $? -ne 0 ]; then
+    log_failure_msg "${MYTAG} ERROR 2: failed to create ${ROOT_RW}"
+    exit 0
+fi
+
+# Make the mount point on the init root filesystem at ${ROOT_RO}.
+[ -d ${ROOT_RO} ] || mkdir -p ${ROOT_RO}
+if [ $? -ne 0 ]; then
+    log_failure_msg "${MYTAG} ERROR 3: failed to create ${ROOT_RO}"
+    exit 0
+fi
+
+# Mount a tmpfs using the device name tmpfs-root at ${ROOT_RW}.
+mount -t tmpfs tmpfs-root ${ROOT_RW}
+if [ $? -ne 0 ]; then
+    log_failure_msg "${MYTAG} ERROR 4: failed to create tmpfs"
+    exit 0
+fi
+
+# Make the mount point for the upper directory at ${ROOT_RW_UPPER}.
+[ -d ${ROOT_RW_UPPER} ] || mkdir -p ${ROOT_RW_UPPER}
+if [ $? -ne 0 ]; then
+    log_failure_msg "${MYTAG} ERROR 5: failed to create ${ROOT_RW_UPPER}"
+    exit 0
+fi
+
+if [ "${ROOT_RO_DRIVER}" = "overlay" ]; then
+
+    [ -d ${ROOT_RW_WORK} ] || mkdir -p ${ROOT_RW_WORK}
+    if [ $? -ne 0 ]; then
+        log_failure_msg "${MYTAG} ERROR 6: failed to create ${ROOT_RW_WORK}"
+        exit 0
+    fi
+
+fi
+
+
+# The root filesystem is mounted at ${rootmnt}; move it to ${ROOT_RO}.
+mount -o move ${rootmnt} ${ROOT_RO}
+if [ $? -ne 0 ]; then
+    log_failure_msg "${MYTAG} ERROR 7: failed to move root away from ${rootmnt} to ${ROOT_RO}"
+    exit 0
+fi
+
+# Nothing is mounted at ${rootmnt} now. If a later operation fails, restore the
+# original mount before dropping into an initramfs shell using "panic".
+# Otherwise, the boot process is likely to fail and leave the system in an
+# inconsistent state.
+
+# Mount the layered filesystem at ${rootmnt}, with ${ROOT_RW} as the writable
+# upper layer and ${ROOT_RO} as the read-only lower layer.
+mount ${MOUNT_PARMS}
+if [ $? -ne 0 ]; then
+    log_failure_msg "${MYTAG} ERROR 8: failed to create new ro/rw layer at ${rootmnt}"
+    # Try to restore the original mount at ${rootmnt}.
+    mount -o move ${ROOT_RO} ${rootmnt}
+    if [ $? -ne 0 ]; then
+       # Drop to a shell so the user can try to repair the mount.
+       panic "${MYTAG} RECOVERY ERROR: failed to move ${ROOT_RO} back to ${rootmnt}"
+    fi
+    exit 0
+fi
+
+# The real root filesystem is now at ${ROOT_RO}, and the layered root
+# filesystem is mounted at ${rootmnt}. Writes below ${rootmnt} are stored in
+# ${ROOT_RW}, while ${ROOT_RO} remains unchanged. The initramfs root filesystem
+# will be removed when the boot process switches to ${rootmnt}, so move both
+# layer mounts to ${rootmnt}${ROOT_RO} and ${rootmnt}${ROOT_RW} first.
+
+# Move the mount from ${ROOT_RO} to ${rootmnt}${ROOT_RO}.
+[ -d ${rootmnt}${ROOT_RO} ] || mkdir -p ${rootmnt}${ROOT_RO}
+mount -o move ${ROOT_RO} ${rootmnt}${ROOT_RO}
+if [ $? -ne 0 ]; then
+    log_failure_msg "${MYTAG} ERROR 9: failed to move ${ROOT_RO} to ${rootmnt}${ROOT_RO}"
+    exit 0
+fi
+
+# Move the mount from ${ROOT_RW} to ${rootmnt}${ROOT_RW}.
+[ -d ${rootmnt}${ROOT_RW} ] || mkdir -p ${rootmnt}${ROOT_RW}
+mount -o move ${ROOT_RW} ${rootmnt}${ROOT_RW}
+if [ $? -ne 0 ]; then
+    log_failure_msg "${MYTAG} ERROR 10: failed to move ${ROOT_RW} to ${rootmnt}${ROOT_RW}"
+    exit 0
+fi
+
+# The layered filesystem is ready. Because the original root filesystem was
+# mounted read-only in the initramfs, ${rootmnt}${ROOT_RO} remains read-only.
+# The installed system is not assumed to be aware of its layered root
+# filesystem, so prepare the remaining configuration before starting init.
+#
+# /etc/fstab usually contains a root filesystem entry that is no longer valid.
+# Remove it and add an entry for ${ROOT_RO}. We are still running from the
+# initramfs root filesystem here, so work on
+# ${rootmnt}/etc/fstab. The original fstab is ${rootmnt}${ROOT_RO}/etc/fstab.
+
+ROOT=$(${rootmnt}/bin/readlink -f ${ROOT})
+ROOT_TYPE=$(cat /proc/mounts | ${rootmnt}/bin/grep ${ROOT} | ${rootmnt}/usr/bin/cut -d' ' -f3)
+ROOT_OPTIONS=$(cat /proc/mounts | ${rootmnt}/bin/grep ${ROOT} | ${rootmnt}/usr/bin/cut -d' ' -f4)
+cat <<EOF >${rootmnt}/etc/fstab
+#
+#  This fstab is in RAM. The persistent file is at ${ROOT_RO}/etc/fstab.
+#  The original entry for '/' and all swap entries have been removed. The new
+#  entry for the real, read-only root filesystem follows. Enable write access
+#  with:
+#    sudo mount -o remount,rw ${ROOT_RO}
+#  Remount it read-only with:
+#    sudo mount -o remount,ro ${ROOT_RO}
+#
+
+${ROOT} ${ROOT_RO} ${ROOT_TYPE} ${ROOT_OPTIONS} 0 0
+
+#
+#  Remaining entries from the original ${ROOT_RO}/etc/fstab follow.
+#
+EOF
+if [ $? -ne 0 ]; then
+    log_failure_msg "${MYTAG} ERROR 11: failed to modify /etc/fstab (step 1)"
+    #exit 0
+fi
+
+# Remove the root entry and swap entries from fstab.
+cat ${rootmnt}${ROOT_RO}/etc/fstab | ${rootmnt}/usr/bin/tr "\t" ' ' | ${rootmnt}/bin/grep -v ' / ' | ${rootmnt}/bin/grep -v swap >>${rootmnt}/etc/fstab
+if [ $? -ne 0 ]; then
+    log_failure_msg "${MYTAG} ERROR 12: failed to modify /etc/fstab (step 2)"
+    #exit 0
+fi
+
+# Setup is complete. Additional steps may be necessary depending on the
+# distribution and its configuration.
+
+log_success_msg "${MYTAG} successfully set up ro/tmpfs-rw layered root fs using ${ROOT_RO_DRIVER}"
+
+exit 0

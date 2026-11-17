@@ -2,6 +2,16 @@
 
 set -e
 
-update-initramfs -u -k all
+do_update_initramfs() {
+  if command -v update-initramfs >/dev/null 2>&1; then
+    update-initramfs -u -k all
+  fi
+}
 
-exit 0
+case "${1}" in
+  configure)
+    do_update_initramfs
+    ;;
+esac
+
+#DEBHELPER#

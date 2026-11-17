@@ -1,0 +1,1 @@
+rm_conffile /etc/initramfs-tools/scripts/init-bottom/00_overlay-root 4.0.0~ overlay-root

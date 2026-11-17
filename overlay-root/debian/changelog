@@ -1,3 +1,27 @@
+overlay-root (4.0.0) unstable; urgency=low
+
+  * Modified 2026 by m4dm4x1337 (fixed legacy overlayfs support, see
+    v4.0.0 changelog)
+    - Replace the static modules.d entry with a hook that selects the
+      correct overlay module for each kernel version
+    - Detect kernels with overlayfs built in
+    - Install the init-bottom script under /usr/share/initramfs-tools
+    - Support both overlay and the legacy overlayfs driver
+    - Skip workdir when using the legacy overlayfs driver
+    - Remove aufs support and the root-ro-driver kernel parameter because
+      aufs keeps direct references to its branch mounts, preventing systemd
+      from cleanly unmounting them during shutdown; aufs is also out-of-tree
+      and no longer available in current distributions
+    - Create the upperdir after mounting tmpfs on the writable layer
+    - Add the optional root-ro=volatile mode for Linux 5.10 and newer
+    - Renumber error messages consistently
+    - Correct inherited spelling, grammar, and documentation errors in the
+      init-bottom script
+  * Avoid rebuilding the initramfs a second time when the package is purged.
+  * Remove the obsolete init-bottom conffile when upgrading from version 3.
+
+ -- m4dm4x1337 <madmax@example.invalid>  Thu, 12 Nov 2026 18:34:03 +0100
+
 overlay-root (3.0.0) unstable; urgency=low
 
   * Modified 2023 by m4dm4x1337 (fixed 2 bugs, see v3.0.0 changelog)
@@ -5,7 +29,7 @@ overlay-root (3.0.0) unstable; urgency=low
       is encrypted)
     - Taking tabs into account in /etc/fstab
 
- -- m4dm4x1337 <madmax@earth.local>  Sun, 29 Oct 2023 01:00:00 +0000
+ -- m4dm4x1337 <madmax@example.invalid>  Sun, 29 Oct 2023 01:00:00 +0000
 
 overlay-root (2.0.0) unstable; urgency=low
 
@@ -17,7 +41,7 @@ overlay-root (2.0.0) unstable; urgency=low
     - Tested with raspian-ua-netinst v1.0.7 (Linux 3.18.0-trunk-rpi,
       Debian 3.18.5) on a Raspberry Pi. The aufs part is not tested!
 
- -- m4dm4x1337 <madmax@earth.local>  Sun, 29 Oct 2023 00:30:00 +0000
+ -- m4dm4x1337 <madmax@example.invalid>  Sun, 29 Oct 2023 00:30:00 +0000
 
 overlay-root (1.0.0) unstable; urgency=low
 
@@ -28,4 +52,4 @@ overlay-root (1.0.0) unstable; urgency=low
     - Based on scripts from Sebastian P. and Nicholas A. Schembri 
       State College PA USA
 
- -- m4dm4x1337 <madmax@earth.local>  Sun, 29 Oct 2023 00:00:00 +0000
+ -- m4dm4x1337 <madmax@example.invalid>  Sun, 29 Oct 2023 00:00:00 +0000

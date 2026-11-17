@@ -1,0 +1,67 @@
+#!/bin/sh
+#
+#  Overlay-Root (hook script)
+#
+#  Modified 2026 by m4dm4x1337 for overlay-root v4.0.0.
+#  This hook replaces the former static modules.d entry and adds the
+#  kernel module that matches the target kernel version:
+#    * overlay   for newer kernels
+#    * overlayfs for legacy kernels
+#  No module needs to be added if OverlayFS is built into the kernel.
+#
+
+set -e
+
+PREREQ=""
+
+prereqs() {
+  echo "$PREREQ"
+}
+
+case "$1" in
+  prereqs)
+    prereqs
+    exit 0
+  ;;
+esac
+
+. /usr/share/initramfs-tools/hook-functions
+
+if [ "${verbose:-}" = "y" ]; then
+  echo "overlay-root: checking kernel module for $version"
+fi
+
+for filepath in \
+  /lib/modules/"$version"/kernel/fs/overlayfs/overlay.* \
+  /lib/modules/"$version"/kernel/fs/overlayfs/overlayfs.*
+do
+  if [ ! -e "$filepath" ]; then
+    continue
+  fi
+
+  module="${filepath##*/}"
+  module="${module%%.*}"
+
+  if [ "${verbose:-}" = "y" ]; then
+    echo "overlay-root: adding module $module from $filepath"
+  fi
+
+  if manual_add_modules "$module"; then
+    exit 0
+  fi
+
+  echo "W: overlay-root: failed to add module $module for kernel ${version}" >&2
+  exit 0
+done
+
+if [ -r /boot/config-"$version" ] && \
+   grep --quiet '^CONFIG_OVERLAY_FS=y$' /boot/config-"$version"; then
+  if [ "${verbose:-}" = "y" ]; then
+    echo "overlay-root: overlay filesystem is built into kernel $version"
+  fi
+  exit 0
+fi
+
+echo "W: overlay-root: neither overlay nor overlayfs module found for kernel ${version}" >&2
+
+exit 0

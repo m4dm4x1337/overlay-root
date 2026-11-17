@@ -2,17 +2,46 @@
 
 set -e
 
+PACKAGE=overlay-root
+VERSION=4.0.0
+
+require_package() { # $1 = package
+  if ! dpkg-query --show "$1" >/dev/null 2>&1; then
+    echo "Required package '$1' is not installed" >&2
+    exit 1
+  fi
+}
+
+require_package dpkg-dev
+require_package debhelper
+require_package lintian
+
+ARCHITECTURE=$(dpkg-architecture --query DEB_HOST_ARCH)
+CHANGES_FILE="../${PACKAGE}_${VERSION}_${ARCHITECTURE}.changes"
+
+find "./${PACKAGE}/debian" \
+  -maxdepth 1 \
+  -type f \
+  \( -name preinst -o -name postinst -o -name postrm \) \
+  -exec sh -n {} +
+
+find "./${PACKAGE}/usr/share/initramfs-tools" \
+  -type f \
+  -exec sh -n {} +
+
 ./clean
 
-cd overlay-root
+cd "$PACKAGE"
 
 case "$1" in
-  --signed-source) dpkg-buildpackage --build=source --sign-key=B1C14B67C1FF9F12 ;;
-         --source) dpkg-buildpackage --build=source --no-sign ;;
-                *) dpkg-buildpackage --build=binary --no-sign ;;
-
+  --signed-source)
+    dpkg-buildpackage --build=source --sign-key=B1C14B67C1FF9F12
+    ;;
+  --source)
+    dpkg-buildpackage --build=source --no-sign
+    ;;
+  *)
+    dpkg-buildpackage --build=binary --unsigned-changes --unsigned-source --no-check-builddeps
+    lintian --allow-root "$CHANGES_FILE"
+    ;;
 esac
-
-cd ..
-
-exit 0

@@ -1,20 +1,30 @@
-Format: http://dep.debian.net/deps/dep5
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: overlay-root
-
-Files:  
- *
-Copyright: 2023 m4dm4x1337 <madmax@earth.local>
-
+Source: https://github.com/m4dm4x1337/overlay-root
+Comment:
+ This project is derived from overlay-root v2.0.0 by Pascal Rosin:
+ https://gist.github.com/niun/34c945d70753fc9e2cc7/3d60338cd8d8daf740692f426a5a1ec17839d613
 
 Files:
- overlay-root/etc/initramfs-tools/scripts/init-bottom/00_overlay-root
-Copyright: 2023 m4dm4x1337 <madmax@earth.local>
+ *
+Copyright: 2023-2026 m4dm4x1337 <madmax@example.invalid>
+License: GPL-3+
+
+Files:
+ usr/share/initramfs-tools/scripts/init-bottom/00_overlay-root
+Copyright: 2023-2026 m4dm4x1337 <madmax@example.invalid>
            2015 Pascal Rosin
            2012 Axel Heider
            2012 Sebastian P.
            2012 Nicholas A. Schembri
+License: GPL-3+
 
-License: GPL-3.0+
+Files:
+ usr/share/initramfs-tools/hooks/zz-overlay-root
+Copyright: 2026 m4dm4x1337 <madmax@example.invalid>
+License: GPL-3+
+
+License: GPL-3+
  This program is free software: you can redistribute it and/or modify
  it under the terms of the GNU General Public License as published by
  the Free Software Foundation, either version 3 of the License, or
