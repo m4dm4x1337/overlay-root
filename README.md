@@ -10,6 +10,13 @@ filesystem read-only while placing a temporary, writable `tmpfs` layer on top.
 Applications can use the root filesystem normally, but changes made through the
 overlay are stored in memory and discarded at the next reboot.
 
+Overlay-Root is a small, straightforward alternative to Ubuntu's more
+feature-rich [overlayroot package](https://wiki.ubuntuusers.de/overlayroot/)
+([English machine translation](https://wiki-ubuntuusers-de.translate.goog/overlayroot/?_x_tr_sl=de&_x_tr_tl=en&_x_tr_hl=de&_x_tr_pto=wapp)).
+It focuses on a temporary RAM-backed write layer and broad compatibility across
+Debian and Ubuntu releases that provide compatible `initramfs-tools` and
+OverlayFS interfaces.
+
 This is useful for purposes such as:
 
 * Testing software on real hardware without permanently changing the system
